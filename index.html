@@ -286,34 +286,43 @@
             }
         }
 
-        async function sendLineBroadcast(messageText) {
-            // ใช้ Proxy เหมือนเดิม เพราะยิงจาก Browser
-            const PROXY_URL = "https://corsproxy.io/?"; 
-            // Endpoint ใหม่: Broadcast (ส่งหาทุกคนที่เป็นเพื่อนกับบอท)
-            const LINE_API_URL = "https://api.line.me/v2/bot/message/broadcast";
+    async function sendLineBroadcast(messageText) {
+    // 🚨 เปลี่ยน PROXY เป็นตัวนี้ครับ
+    const PROXY_URL = "https://cors-anywhere.herokuapp.com/"; 
+    
+    const LINE_API_URL = "https://api.line.me/v2/bot/message/broadcast";
 
-            const bodyData = {
-                messages: [
-                    { type: "text", text: "💊 NuizyMed แจ้งเตือน:\n" + messageText }
-                ]
-            };
+    const bodyData = {
+        messages: [
+            { type: "text", text: "💊 NuizyMed แจ้งเตือน:\n" + messageText }
+        ]
+    };
 
-            try {
-                const response = await fetch(PROXY_URL + encodeURIComponent(LINE_API_URL), {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${lineToken}`,
-                        'Content-Type': 'application/json' // ต้องเป็น JSON
-                    },
-                    body: JSON.stringify(bodyData)
-                });
-                
-                if (!response.ok) {
-                    const err = await response.text();
-                    console.error("Line Error:", err);
-                }
-            } catch (e) { console.error("Network Error:", e); }
+    try {
+        const response = await fetch(PROXY_URL + LINE_API_URL, { // ลบ encodeURIComponent ออก
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${lineToken}`,
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest' // เพิ่มบรรทัดนี้เพื่อความชัวร์
+            },
+            body: JSON.stringify(bodyData)
+        });
+        
+        if (!response.ok) {
+            const err = await response.text();
+            console.error("Line Error:", err);
+            // เพิ่มแจ้งเตือนให้รู้ถ้าลืมกดปุ่มเปิด Proxy
+            if(response.status === 403) {
+                alert("⚠️ กรุณาไปกดปุ่ม 'Request temporary access' ที่เว็บ cors-anywhere ก่อนใช้งานนะครับ!");
+                window.open("https://cors-anywhere.herokuapp.com/corsdemo", "_blank");
+            }
+        } else {
+            console.log("Line Sent!");
         }
+    } catch (e) { console.error("Network Error:", e); }
+}
     </script>
 </body>
+
 </html>
