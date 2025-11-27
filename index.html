@@ -227,65 +227,7 @@
                 list.insertAdjacentHTML('beforeend', html);
             });
         }
-
-        // --- REMINDER LOGIC ---
-        function checkReminders() {
-            const now = new Date();
-            const currentISO = localISOString(now);
-            const currentTimeOnly = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            const currentDay = now.getDay();
-
-            medications.forEach(med => {
-                const start = new Date(med.startDate);
-                if (now < start) return;
-                if (med.endDate) {
-                    const end = new Date(med.endDate);
-                    end.setHours(23, 59, 59);
-                    if (now > end) return;
-                }
-
-                let shouldAlert = false;
-                if (med.recurrence === 'once' && med.startDate === currentISO) shouldAlert = true;
-                else if (med.recurrence === 'daily' && start.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) === currentTimeOnly) shouldAlert = true;
-                else if (med.recurrence === 'weekly' && med.selectedDays.includes(currentDay) && start.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) === currentTimeOnly) shouldAlert = true;
-
-                if (shouldAlert && med.lastAlert !== currentISO) {
-                    const msg = `ถึงเวลา: ${med.name} (${currentTimeOnly} น.)`;
-                    alert(msg);
-                    if (lineToken) sendLineBroadcast(msg); // ใช้ฟังก์ชันใหม่
-                    med.lastAlert = currentISO;
-                    saveAndRender();
-                }
-            });
-        }
-
-        function localISOString(d) {
-            const offset = d.getTimezoneOffset() * 60000;
-            return (new Date(d - offset)).toISOString().slice(0, 16);
-        }
-
-        // --- LINE MESSAGING API (BROADCAST) ---
-        function saveToken() {
-            const token = document.getElementById('lineToken').value;
-            if (token) {
-                localStorage.setItem('lineBotToken', token);
-                lineToken = token;
-                alert('บันทึก Token เรียบร้อย! (อย่าลืม Add Friend บอทตัวเองด้วยนะ)');
-                updateTokenStatus();
-                settingsModal.hide();
-            }
-        }
-
-        function updateTokenStatus() {
-            const statusText = document.getElementById('tokenStatus');
-            if (lineToken) {
-                statusText.innerHTML = '<span class="text-success">✅ พร้อมใช้งาน (Messaging API)</span>';
-                document.getElementById('lineToken').value = lineToken;
-            } else {
-                statusText.innerHTML = '<span class="text-secondary">❌ ยังไม่ใส่ Token</span>';
-            }
-        }
-
+    
     async function sendLineBroadcast(messageText) {
     // 🚨 เปลี่ยน PROXY เป็นตัวนี้ครับ
     const PROXY_URL = "https://cors-anywhere.herokuapp.com/"; 
@@ -322,7 +264,85 @@
         }
     } catch (e) { console.error("Network Error:", e); }
 }
+        
+        // --- REMINDER LOGIC ---
+       function checkReminders() {
+            const now = new Date();
+            const currentISO = localISOString(now);
+            const currentTimeOnly = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            const currentDay = now.getDay();
+
+            medications.forEach(med => {
+                const start = new Date(med.startDate);
+                if (now < start) return;
+                if (med.endDate) {
+                    const end = new Date(med.endDate);
+                    end.setHours(23, 59, 59);
+                    if (now > end) return;
+                }
+
+                let shouldAlert = false;
+
+                if (med.recurrence === 'once') {
+                    if (med.startDate === currentISO) shouldAlert = true;
+                } else if (med.recurrence === 'daily') {
+                    const startTimeOnly = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    if (currentTimeOnly === startTimeOnly) shouldAlert = true;
+                } else if (med.recurrence === 'weekly') {
+                    const startTimeOnly = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    if (med.selectedDays.includes(currentDay) && currentTimeOnly === startTimeOnly) shouldAlert = true;
+                }
+
+                // --- จุดที่แก้ไขคือตรงนี้ครับ ---
+                if (shouldAlert && med.lastAlert !== currentISO) {
+                    const msg = `${med.name} (เวลา ${currentTimeOnly} น.)`;
+                    
+                    // 1. สั่งยิง LINE ออกไปก่อนทันที (Fire and Forget)
+                    if (lineToken) sendLineBroadcast(msg);
+                    
+                    // 2. บันทึกสถานะว่าเตือนแล้ว (กันเตือนซ้ำ)
+                    med.lastAlert = currentISO;
+                    saveAndRender();
+
+                    // 3. ใช้ setTimeout หน่วงเวลา Alert 0.5 วินาที
+                    // เพื่อให้มั่นใจว่า Network Request ถูกส่งออกไปแล้ว ก่อนที่ Alert จะหยุดหน้าจอ
+                    setTimeout(() => {
+                        alert(`💊 ถึงเวลา: ${msg}`);
+                    }, 500);
+                }
+            });
+        }
+
+        function localISOString(d) {
+            const offset = d.getTimezoneOffset() * 60000;
+            return (new Date(d - offset)).toISOString().slice(0, 16);
+        }
+
+        // --- LINE MESSAGING API (BROADCAST) ---
+        function saveToken() {
+            const token = document.getElementById('lineToken').value;
+            if (token) {
+                localStorage.setItem('lineBotToken', token);
+                lineToken = token;
+                alert('บันทึก Token เรียบร้อย! (อย่าลืม Add Friend บอทตัวเองด้วยนะ)');
+                updateTokenStatus();
+                settingsModal.hide();
+            }
+        }
+
+        function updateTokenStatus() {
+            const statusText = document.getElementById('tokenStatus');
+            if (lineToken) {
+                statusText.innerHTML = '<span class="text-success">✅ พร้อมใช้งาน (Messaging API)</span>';
+                document.getElementById('lineToken').value = lineToken;
+            } else {
+                statusText.innerHTML = '<span class="text-secondary">❌ ยังไม่ใส่ Token</span>';
+            }
+        }
+
+    
     </script>
 </body>
 
 </html>
+
