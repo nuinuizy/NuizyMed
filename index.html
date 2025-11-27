@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NuizyMed 2025</title>
+    <title>NuizyMed Final</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -64,7 +64,7 @@
 <body>
 
     <div class="app-header">
-        <h1 class="app-title">💊 NuizyMed <small style="font-size:0.4em; color:#888;">2025</small></h1>
+        <h1 class="app-title">💊 NuizyMed <small style="font-size:0.4em; color:#888;">Final</small></h1>
         <button class="btn btn-link text-secondary" data-bs-toggle="modal" data-bs-target="#settingsModal">
             <span class="material-icons-round">settings</span>
         </button>
@@ -74,7 +74,7 @@
         <div id="medList"></div>
         <div id="emptyState" class="text-center mt-5 d-none">
             <span class="material-icons-round text-secondary" style="font-size: 4rem;">medication_liquid</span>
-            <p class="text-muted mt-2">เพิ่มรายการเตือนได้เลย</p>
+            <p class="text-muted mt-2">ระบบพร้อมทำงาน...</p>
         </div>
     </div>
 
@@ -133,14 +133,18 @@
     <div class="modal fade" id="settingsModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0">
-                <div class="modal-header"><h5 class="modal-title">ตั้งค่าบอท (Messaging API)</h5></div>
+                <div class="modal-header"><h5 class="modal-title">ตั้งค่าการเชื่อมต่อ</h5></div>
                 <div class="modal-body">
-                    <div class="alert alert-info small">
-                        ใส่ <b>Channel Access Token</b> จาก LINE Developers<br>
-                        (อย่าลืม Add Friend บอทตัวเองด้วยนะ!)
+                    <div class="alert alert-warning small">
+                        <b>⚠️ สำคัญ:</b> ถ้า LINE ไม่เด้ง ให้กดปุ่มด้านล่างเพื่อยืนยันตัวตนกับ Proxy ก่อนครับ (กด 1 ครั้ง ใช้ได้ชั่วคราว)
+                        <div class="d-grid mt-2">
+                            <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" class="btn btn-outline-warning btn-sm">🔓 กดปุ่มนี้เพื่อปลดล็อค Proxy</a>
+                        </div>
                     </div>
+                    <hr>
+                    <label class="small text-muted mb-1">Channel Access Token (Messaging API)</label>
                     <input type="password" id="lineToken" class="form-control mb-3" placeholder="วาง Token ยาวๆ ที่นี่">
-                    <button onclick="saveToken()" class="btn btn-success w-100">บันทึก</button>
+                    <button onclick="saveToken()" class="btn btn-success w-100">บันทึก Token</button>
                     <p id="tokenStatus" class="text-center mt-3 small"></p>
                 </div>
             </div>
@@ -151,15 +155,18 @@
 
     <script>
         // --- DATA ---
-        let medications = JSON.parse(localStorage.getItem('nuizymed_db_v2')) || [];
+        let medications = JSON.parse(localStorage.getItem('nuizymed_db_final')) || [];
         let lineToken = localStorage.getItem('lineBotToken') || '';
 
         const addModal = new bootstrap.Modal(document.getElementById('addModal'));
         const settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
 
+        // เริ่มต้นทำงาน
         updateTokenStatus();
         renderMeds();
-        setInterval(checkReminders, 10000); 
+        
+        // เช็คเตือนทุกๆ 5 วินาที (เพื่อให้แม่นยำขึ้น)
+        setInterval(checkReminders, 5000); 
 
         function toggleWeekSelector() {
             const mode = document.getElementById('medRecurrence').value;
@@ -181,7 +188,8 @@
             const newMed = { id: Date.now(), name, startDate, endDate, recurrence, selectedDays, lastAlert: null };
             medications.push(newMed);
             saveAndRender();
-            // Reset & Close
+            
+            // Reset
             document.getElementById('medName').value = '';
             document.querySelectorAll('.day-checkbox').forEach(cb => cb.checked = false);
             addModal.hide();
@@ -195,7 +203,7 @@
         }
 
         function saveAndRender() {
-            localStorage.setItem('nuizymed_db_v2', JSON.stringify(medications));
+            localStorage.setItem('nuizymed_db_final', JSON.stringify(medications));
             renderMeds();
         }
 
@@ -212,6 +220,7 @@
                 
                 let badge = med.recurrence === 'daily' ? 'ทุกวัน' : (med.recurrence === 'weekly' ? 'รายสัปดาห์' : 'ครั้งเดียว');
                 let details = med.recurrence === 'weekly' ? `วัน: ${med.selectedDays.map(d => dayNames[d]).join(', ')}` : '';
+                if(med.recurrence === 'once') details = startObj.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 
                 const html = `
                     <div class="med-card active-item">
@@ -227,90 +236,59 @@
                 list.insertAdjacentHTML('beforeend', html);
             });
         }
-    
-    async function sendLineBroadcast(messageText) {
-    // 🚨 เปลี่ยน PROXY เป็นตัวนี้ครับ
-    const PROXY_URL = "https://cors-anywhere.herokuapp.com/"; 
-    
-    const LINE_API_URL = "https://api.line.me/v2/bot/message/broadcast";
 
-    const bodyData = {
-        messages: [
-            { type: "text", text: "💊 NuizyMed แจ้งเตือน:\n" + messageText }
-        ]
-    };
+        // --- CORE LOGIC (แก้ไขเรียงลำดับแล้ว) ---
+        function checkReminders() {
+            try {
+                const now = new Date();
+                const currentISO = localISOString(now); // YYYY-MM-DDTHH:mm
+                const currentTimeOnly = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                const currentDay = now.getDay();
 
-    try {
-        const response = await fetch(PROXY_URL + LINE_API_URL, { // ลบ encodeURIComponent ออก
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${lineToken}`,
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest' // เพิ่มบรรทัดนี้เพื่อความชัวร์
-            },
-            body: JSON.stringify(bodyData)
-        });
-        
-        if (!response.ok) {
-            const err = await response.text();
-            console.error("Line Error:", err);
-            // เพิ่มแจ้งเตือนให้รู้ถ้าลืมกดปุ่มเปิด Proxy
-            if(response.status === 403) {
-                alert("⚠️ กรุณาไปกดปุ่ม 'Request temporary access' ที่เว็บ cors-anywhere ก่อนใช้งานนะครับ!");
-                window.open("https://cors-anywhere.herokuapp.com/corsdemo", "_blank");
+                medications.forEach(med => {
+                    const start = new Date(med.startDate);
+                    if (now < start) return;
+                    if (med.endDate) {
+                        const end = new Date(med.endDate);
+                        end.setHours(23, 59, 59);
+                        if (now > end) return;
+                    }
+
+                    let shouldAlert = false;
+                    
+                    // Logic การเช็คเวลา
+                    if (med.recurrence === 'once') {
+                        if (med.startDate === currentISO) shouldAlert = true;
+                    } else if (med.recurrence === 'daily') {
+                        const startTimeOnly = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        if (currentTimeOnly === startTimeOnly) shouldAlert = true;
+                    } else if (med.recurrence === 'weekly') {
+                        const startTimeOnly = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        if (med.selectedDays.includes(currentDay) && currentTimeOnly === startTimeOnly) shouldAlert = true;
+                    }
+
+                    // --- จุดสำคัญ: เรียงลำดับการทำงาน ---
+                    if (shouldAlert && med.lastAlert !== currentISO) {
+                        const msg = `${med.name} (เวลา ${currentTimeOnly} น.)`;
+                        
+                        console.log("Triggering Alert for:", msg);
+
+                        // 1. ส่ง LINE ก่อน (Fire & Forget)
+                        if (lineToken) sendLineBroadcast(msg);
+                        
+                        // 2. บันทึกว่าเตือนแล้วทันที (กันเบิ้ล)
+                        med.lastAlert = currentISO;
+                        saveAndRender();
+
+                        // 3. ใช้ setTimeout เพื่อ Alert บนหน้าเว็บทีหลัง (ไม่ให้ Block การส่ง LINE)
+                        setTimeout(() => {
+                            alert(`💊 ถึงเวลา: ${msg}`);
+                        }, 500); // หน่วงเวลา 0.5 วินาที
+                    }
+                });
+            } catch (error) {
+                console.error("System Error:", error);
             }
-        } else {
-            console.log("Line Sent!");
-        }
-    } catch (e) { console.error("Network Error:", e); }
-}
-        
-        // --- REMINDER LOGIC ---
-       function checkReminders() {
-            const now = new Date();
-            const currentISO = localISOString(now);
-            const currentTimeOnly = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            const currentDay = now.getDay();
-
-            medications.forEach(med => {
-                const start = new Date(med.startDate);
-                if (now < start) return;
-                if (med.endDate) {
-                    const end = new Date(med.endDate);
-                    end.setHours(23, 59, 59);
-                    if (now > end) return;
-                }
-
-                let shouldAlert = false;
-
-                if (med.recurrence === 'once') {
-                    if (med.startDate === currentISO) shouldAlert = true;
-                } else if (med.recurrence === 'daily') {
-                    const startTimeOnly = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                    if (currentTimeOnly === startTimeOnly) shouldAlert = true;
-                } else if (med.recurrence === 'weekly') {
-                    const startTimeOnly = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                    if (med.selectedDays.includes(currentDay) && currentTimeOnly === startTimeOnly) shouldAlert = true;
-                }
-
-                // --- จุดที่แก้ไขคือตรงนี้ครับ ---
-                if (shouldAlert && med.lastAlert !== currentISO) {
-                    const msg = `${med.name} (เวลา ${currentTimeOnly} น.)`;
-                    
-                    // 1. สั่งยิง LINE ออกไปก่อนทันที (Fire and Forget)
-                    if (lineToken) sendLineBroadcast(msg);
-                    
-                    // 2. บันทึกสถานะว่าเตือนแล้ว (กันเตือนซ้ำ)
-                    med.lastAlert = currentISO;
-                    saveAndRender();
-
-                    // 3. ใช้ setTimeout หน่วงเวลา Alert 0.5 วินาที
-                    // เพื่อให้มั่นใจว่า Network Request ถูกส่งออกไปแล้ว ก่อนที่ Alert จะหยุดหน้าจอ
-                    setTimeout(() => {
-                        alert(`💊 ถึงเวลา: ${msg}`);
-                    }, 500);
-                }
-            });
         }
 
         function localISOString(d) {
@@ -318,15 +296,14 @@
             return (new Date(d - offset)).toISOString().slice(0, 16);
         }
 
-        // --- LINE MESSAGING API (BROADCAST) ---
+        // --- LINE MESSAGING API (With Proxy Fix) ---
         function saveToken() {
             const token = document.getElementById('lineToken').value;
             if (token) {
                 localStorage.setItem('lineBotToken', token);
                 lineToken = token;
-                alert('บันทึก Token เรียบร้อย! (อย่าลืม Add Friend บอทตัวเองด้วยนะ)');
+                alert('บันทึกเรียบร้อย!');
                 updateTokenStatus();
-                settingsModal.hide();
             }
         }
 
@@ -340,9 +317,40 @@
             }
         }
 
-    
+        async function sendLineBroadcast(messageText) {
+            // ใช้ Proxy: cors-anywhere (ต้องกดขอสิทธิ์ก่อนใช้งาน)
+            const PROXY_URL = "https://cors-anywhere.herokuapp.com/"; 
+            const LINE_API_URL = "https://api.line.me/v2/bot/message/broadcast";
+
+            const bodyData = {
+                messages: [
+                    { type: "text", text: "💊 NuizyMed แจ้งเตือน:\n" + messageText }
+                ]
+            };
+
+            try {
+                // ส่ง Request โดยไม่รอ (await) เพื่อความเร็วสูงสุดใน UI แต่รอเพื่อ Log error
+                fetch(PROXY_URL + LINE_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${lineToken}`,
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(bodyData)
+                }).then(response => {
+                    if (!response.ok) {
+                        console.error("Line Failed:", response.status);
+                        if(response.status === 403) {
+                            // แจ้งเตือนเงียบๆ ใน Console ว่าต้องไปปลดล็อค Proxy
+                            console.warn("Please unlock proxy at cors-anywhere demo page");
+                        }
+                    } else {
+                        console.log("Line Sent Successfully!");
+                    }
+                });
+            } catch (e) { console.error("Network Error:", e); }
+        }
     </script>
 </body>
-
 </html>
-
